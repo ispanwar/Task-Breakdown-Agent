@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import re
 from agent import create_task_breakdown_agent
 
 st.set_page_config(
@@ -9,141 +10,181 @@ st.set_page_config(
 )
 
 st.title("🤖 Task Breakdown Agent")
-st.markdown("""
-This agent helps you break down complex goals into actionable steps,
-prioritize them, and identify potential challenges.
-""")
+st.markdown("Break down your goals into actionable steps with AI assistance")
 
-# Initialize agent in session state
+# Initialize session state
 if "agent" not in st.session_state:
     st.session_state.agent = create_task_breakdown_agent()
-    st.session_state.last_response = None
-    st.session_state.refine_mode = False
+    st.session_state.plan_data = None
+    st.session_state.status = None
+    st.session_state.error = None
 
-# Sidebar for instructions
+# Sidebar
 with st.sidebar:
-    st.header("📋 How to use")
+    st.header("📋 Instructions")
     st.markdown("""
-    1. **Enter your goal** in the text area
-    2. **Click "Break it Down"** to generate a plan
-    3. **Use Refine** to ask follow-up questions
-    4. **Reset** to start a new goal
-
-    Examples:
-    - "Learn Python for web development"
-    - "Launch a personal blog"
-    - "Build a machine learning model"
-    - "Prepare for a job interview"
+    1. Enter your goal
+    2. Click "Generate Plan"
+    3. Review the breakdown
+    4. Use "Refine" for adjustments
+    5. Click "Reset" to start over
     """)
 
-    if st.button("🔄 Reset", use_container_width=True):
+    if st.button("🔄 Reset Everything", use_container_width=True):
         st.session_state.agent["reset"]()
-        st.session_state.last_response = None
-        st.session_state.refine_mode = False
+        st.session_state.plan_data = None
+        st.session_state.status = None
+        st.session_state.error = None
         st.rerun()
 
-# Main content area
-st.subheader("Your Goal")
-user_input = st.text_area(
-    "What goal do you want to break down?",
-    placeholder="e.g., Learn Python for web development in 3 months",
-    height=100,
-    key="user_input"
+# Main input section
+st.subheader("📝 Your Goal")
+user_goal = st.text_area(
+    "What do you want to accomplish?",
+    placeholder="e.g., Learn React and build a portfolio in 3 months",
+    height=80,
+    key="goal_input"
 )
 
-# Button section
+# Button controls
 col1, col2, col3 = st.columns(3)
-
 with col1:
-    submit_button = st.button("✨ Break it Down", use_container_width=True, type="primary")
-
+    generate_btn = st.button("✨ Generate Plan", use_container_width=True, type="primary")
 with col2:
-    refine_button = st.button("🎯 Refine", use_container_width=True, disabled=st.session_state.last_response is None)
-
+    refine_btn = st.button("🎯 Refine", use_container_width=True, disabled=st.session_state.plan_data is None)
 with col3:
-    clear_button = st.button("🗑️ Clear", use_container_width=True)
+    clear_btn = st.button("🗑️ Clear", use_container_width=True)
 
-# Handle button clicks
-if clear_button:
-    st.session_state.last_response = None
-    st.session_state.refine_mode = False
-    st.session_state.user_input = ""
+# Handle clear button
+if clear_btn:
+    st.session_state.plan_data = None
+    st.session_state.status = None
+    st.session_state.error = None
     st.rerun()
 
-if submit_button and user_input:
-    with st.spinner("🤔 Agent is thinking..."):
-        response = st.session_state.agent["chat"](
-            f"Please break down this goal into actionable steps: {user_input}"
+# Handle generate plan
+if generate_btn:
+    if not user_goal.strip():
+        st.error("❌ Please enter a goal first!")
+    else:
+        st.session_state.status = "loading"
+        st.session_state.error = None
+
+        try:
+            with st.spinner("🤔 AI is analyzing your goal..."):
+                response_text = st.session_state.agent["chat"](
+                    f"Please break down this goal into actionable steps: {user_goal}"
+                )
+
+                # Parse JSON from response
+                json_match = re.search(r'\{[\s\S]*\}', response_text)
+                if json_match:
+                    plan_json = json_match.group(0)
+                    st.session_state.plan_data = json.loads(plan_json)
+                    st.session_state.status = "complete"
+                else:
+                    st.session_state.error = "Could not parse plan structure"
+                    st.session_state.status = "error"
+        except json.JSONDecodeError as e:
+            st.session_state.error = f"JSON Parse Error: {str(e)}"
+            st.session_state.status = "error"
+        except Exception as e:
+            st.session_state.error = f"Error: {str(e)}"
+            st.session_state.status = "error"
+
+# Display status and plan
+if st.session_state.status == "loading":
+    st.warning("⏳ Generating plan... Please wait")
+
+elif st.session_state.status == "error":
+    st.error(f"❌ {st.session_state.error}")
+
+elif st.session_state.status == "complete" and st.session_state.plan_data:
+    st.success("✅ Plan generated successfully!")
+    st.divider()
+
+    plan = st.session_state.plan_data
+
+    # Display goal
+    if "goal" in plan:
+        st.markdown(f"**Goal:** {plan['goal']}")
+
+    # Display estimated time
+    if "estimated_time" in plan:
+        st.markdown(f"**⏱️ Estimated Time:** {plan['estimated_time']}")
+
+    st.divider()
+
+    # Display steps
+    if "steps" in plan:
+        st.subheader("📋 Steps to Complete")
+        for i, step in enumerate(plan["steps"], 1):
+            # Priority indicator
+            priority = step.get("priority", 3)
+            if priority >= 4:
+                priority_icon = "🔴"
+            elif priority >= 2:
+                priority_icon = "🟡"
+            else:
+                priority_icon = "🟢"
+
+            effort = step.get("effort", "medium").upper()
+
+            with st.container(border=True):
+                st.markdown(f"### {i}. {priority_icon} {step['title']}")
+                st.markdown(step['description'])
+                st.markdown(f"*Effort: {effort}*")
+
+    # Display tips
+    if "tips" in plan:
+        st.subheader("💡 Pro Tips")
+        for tip in plan["tips"]:
+            st.markdown(f"✓ {tip}")
+
+    # Display challenges
+    if "potential_challenges" in plan:
+        st.subheader("⚠️ Potential Challenges")
+        for challenge in plan["potential_challenges"]:
+            st.markdown(f"• {challenge}")
+
+    # Refine section
+    st.divider()
+    if refine_btn:
+        st.subheader("🎯 Refine Your Plan")
+
+        refine_input = st.text_input(
+            "What would you like to adjust or ask?",
+            placeholder="e.g., Add more details on step 2, make it harder, add timeline...",
+            key="refine_input"
         )
-        st.session_state.last_response = response
-        st.session_state.refine_mode = False
 
-if refine_button:
-    st.session_state.refine_mode = True
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Submit Refinement", use_container_width=True, type="primary"):
+                if refine_input.strip():
+                    try:
+                        with st.spinner("🤔 Refining your plan..."):
+                            response_text = st.session_state.agent["chat"](refine_input)
 
-# Display refine input if in refine mode
-if st.session_state.refine_mode:
-    st.divider()
-    refinement_input = st.text_input(
-        "What would you like to refine or ask about?",
-        placeholder="e.g., Can you add more details on step 3?"
-    )
+                            # Parse JSON from response
+                            json_match = re.search(r'\{[\s\S]*\}', response_text)
+                            if json_match:
+                                plan_json = json_match.group(0)
+                                st.session_state.plan_data = json.loads(plan_json)
+                                st.session_state.status = "complete"
+                                st.rerun()
+                            else:
+                                st.error("Could not parse refined plan")
+                    except json.JSONDecodeError:
+                        st.error("Error parsing refined plan")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+                else:
+                    st.warning("Please enter your refinement request")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("✅ Submit", use_container_width=True, type="primary"):
-            if refinement_input:
-                with st.spinner("🤔 Agent is thinking..."):
-                    response = st.session_state.agent["chat"](refinement_input)
-                    st.session_state.last_response = response
-                    st.session_state.refine_mode = False
-                    st.rerun()
-    with col2:
-        if st.button("❌ Cancel", use_container_width=True):
-            st.session_state.refine_mode = False
-            st.rerun()
+        with col2:
+            if st.button("❌ Cancel", use_container_width=True):
+                st.rerun()
 
-# Display final response
-if st.session_state.last_response:
-    st.divider()
-    st.subheader("📋 Your Plan")
-
-    response_content = st.session_state.last_response
-
-    # Try to parse and display structured data
-    try:
-        if "{" in response_content and "}" in response_content:
-            json_start = response_content.find("{")
-            json_end = response_content.rfind("}") + 1
-            json_str = response_content[json_start:json_end]
-            data = json.loads(json_str)
-
-            # Display structured plan
-            if "steps" in data:
-                st.markdown("### 📝 Task Steps:")
-                for i, step in enumerate(data["steps"], 1):
-                    priority = "🔴" if step.get("priority", 0) >= 4 else "🟡" if step.get("priority", 0) >= 2 else "🟢"
-                    effort = step.get("effort", "medium")
-                    st.markdown(
-                        f"{i}. {priority} **{step['title']}** ({effort})\n"
-                        f"   {step['description']}"
-                    )
-
-            if "estimated_time" in data:
-                st.markdown(f"### ⏱️ Estimated Time: {data['estimated_time']}")
-
-            if "tips" in data:
-                st.markdown("### 💡 Pro Tips:")
-                for tip in data["tips"]:
-                    st.markdown(f"• {tip}")
-
-            if "potential_challenges" in data:
-                st.markdown("### ⚠️ Potential Challenges:")
-                for challenge in data["potential_challenges"]:
-                    st.markdown(f"• {challenge}")
-        else:
-            st.write(response_content)
-    except (json.JSONDecodeError, ValueError):
-        st.write(response_content)
-else:
-    st.info("👈 Enter a goal and click 'Break it Down' to get started!")
+elif st.session_state.plan_data is None and st.session_state.status is None:
+    st.info("👈 Enter a goal and click 'Generate Plan' to get started!")
