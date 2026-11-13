@@ -1,10 +1,10 @@
 import json
-from anthropic import Anthropic
+from groq import Groq
 
-client = Anthropic()
+client = Groq()
 
 def create_task_breakdown_agent():
-    """Create an agent that breaks down goals into executable tasks."""
+    """Create an agent that breaks down goals into executable tasks using Groq."""
 
     system_prompt = """You are an expert task breakdown agent. Your job is to help users accomplish their goals by:
 1. Breaking down complex goals into clear, actionable steps
@@ -31,14 +31,14 @@ Always think step by step about what's needed to accomplish the goal."""
             "content": user_message
         })
 
-        response = client.messages.create(
-            model="claude-opus-4-1",
+        response = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
             max_tokens=2048,
             system=system_prompt,
             messages=conversation_history
         )
 
-        assistant_message = response.content[0].text
+        assistant_message = response.choices[0].message.content
         conversation_history.append({
             "role": "assistant",
             "content": assistant_message

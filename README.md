@@ -1,6 +1,6 @@
 # Task Breakdown Agent 🤖
 
-A simple AI agent that helps you break down complex goals into actionable, prioritized tasks using Claude and Streamlit.
+A simple AI agent that helps you break down complex goals into actionable, prioritized tasks using Groq (free) and Streamlit.
 
 ## Features
 
@@ -11,12 +11,13 @@ A simple AI agent that helps you break down complex goals into actionable, prior
 - **Challenge Identification**: Highlights potential blockers
 - **Pro Tips**: Practical advice for goal completion
 - **Conversational Refinement**: Ask follow-up questions to refine the plan
+- **100% Free**: Uses Groq's free tier (no credit card required)
 
 ## Project Structure
 
 ```
 .
-├── agent.py          # Agent logic using Claude API
+├── agent.py          # Agent logic using Groq API
 ├── app.py            # Streamlit web interface
 ├── requirements.txt  # Python dependencies
 └── README.md         # This file
@@ -41,13 +42,18 @@ A simple AI agent that helps you break down complex goals into actionable, prior
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables**
+4. **Get a free Groq API key**
+   - Go to https://console.groq.com
+   - Sign up (free, no credit card needed)
+   - Copy your API key
+
+5. **Set up environment variables**
    ```bash
    # Create a .env file
-   echo "ANTHROPIC_API_KEY=your_api_key_here" > .env
+   echo "GROQ_API_KEY=your_api_key_here" > .env
    ```
 
-5. **Run the Streamlit app**
+6. **Run the Streamlit app**
    ```bash
    streamlit run app.py
    ```
@@ -56,7 +62,7 @@ A simple AI agent that helps you break down complex goals into actionable, prior
 
 ### Agent Architecture
 
-The agent uses Claude's extended thinking and conversational capabilities to:
+The agent uses Groq's fast inference engine with Mixtral model for:
 
 1. **Parse the Goal**: Understands what the user wants to accomplish
 2. **Plan**: Breaks down into logical steps with dependencies
@@ -80,11 +86,12 @@ The agent uses Claude's extended thinking and conversational capabilities to:
 ## Learning Goals
 
 This project teaches:
-- ✅ Building agents with Claude API
-- ✅ Multi-turn conversations with context
+- ✅ Building agents with open-source models (Groq)
+- ✅ Multi-turn conversations with context management
 - ✅ Structured outputs from LLMs
 - ✅ Streamlit for rapid UI prototyping
 - ✅ Error handling and edge cases
+- ✅ Using free APIs for learning projects
 
 ## Future Enhancements
 
@@ -98,8 +105,9 @@ This project teaches:
 ## Requirements
 
 - Python 3.10+
-- Anthropic API key
-- ~30MB disk space for dependencies
+- Free Groq API key (from https://console.groq.com)
+- ~50MB disk space for dependencies
+- Internet connection
 
 ## License
 
