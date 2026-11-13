@@ -1,6 +1,8 @@
 import json
+from dotenv import load_dotenv
 from groq import Groq
 
+load_dotenv()
 client = Groq()
 
 def create_task_breakdown_agent():
