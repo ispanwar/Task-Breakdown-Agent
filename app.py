@@ -186,7 +186,6 @@ elif st.session_state.status == "complete" and st.session_state.plan_data:
                             json_str = json_match.group(0)
                             st.session_state.plan_data = json.loads(json_str)
                             st.session_state.status = "complete"
-                            st.session_state.refine_input_main = ""
                             st.rerun()
                         else:
                             st.error("❌ Could not parse refined plan. Try again with different wording.")
