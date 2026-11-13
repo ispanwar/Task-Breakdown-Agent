@@ -23,11 +23,11 @@ if "agent" not in st.session_state:
 with st.sidebar:
     st.header("📋 Instructions")
     st.markdown("""
-    1. Enter your goal
-    2. Click "Generate Plan"
-    3. Review the breakdown
-    4. Use "Refine" for adjustments
-    5. Click "Reset" to start over
+    1. **Enter your goal**
+    2. **Click "Generate Plan"**
+    3. **Review the plan** that appears
+    4. **Refine it** using the input below the plan
+    5. **Keep refining** until satisfied
     """)
 
     if st.button("🔄 Reset Everything", use_container_width=True):
@@ -35,6 +35,7 @@ with st.sidebar:
         st.session_state.plan_data = None
         st.session_state.status = None
         st.session_state.error = None
+        st.session_state.user_input = ""
         st.rerun()
 
 # Main input section
@@ -43,23 +44,22 @@ user_goal = st.text_area(
     "What do you want to accomplish?",
     placeholder="e.g., Learn React and build a portfolio in 3 months",
     height=80,
-    key="goal_input"
+    key="user_input"
 )
 
 # Button controls
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     generate_btn = st.button("✨ Generate Plan", use_container_width=True, type="primary")
 with col2:
-    refine_btn = st.button("🎯 Refine", use_container_width=True, disabled=st.session_state.plan_data is None)
-with col3:
-    clear_btn = st.button("🗑️ Clear", use_container_width=True)
+    clear_btn = st.button("🗑️ Clear All", use_container_width=True)
 
 # Handle clear button
 if clear_btn:
     st.session_state.plan_data = None
     st.session_state.status = None
     st.session_state.error = None
+    st.session_state.user_input = ""
     st.rerun()
 
 # Handle generate plan
@@ -155,50 +155,47 @@ elif st.session_state.status == "complete" and st.session_state.plan_data:
         for challenge in plan["potential_challenges"]:
             st.markdown(f"• {challenge}")
 
-    # Refine section
+    # Refinement section - always shown after plan is generated
     st.divider()
-    if refine_btn:
-        st.subheader("🎯 Refine Your Plan")
+    st.subheader("🎯 Refine Your Plan")
+    st.markdown("Don't like something? Ask for changes below:")
 
-        refine_input = st.text_input(
-            "What would you like to adjust or ask?",
-            placeholder="e.g., Add more details on step 2, make it harder, add timeline...",
-            key="refine_input"
-        )
+    refine_input = st.text_input(
+        "What would you like to adjust or improve?",
+        placeholder="e.g., Add more details on step 2, make it harder, add timeline, focus on first step...",
+        key="refine_input_main"
+    )
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ Submit Refinement", use_container_width=True, type="primary"):
-                if refine_input.strip():
-                    try:
-                        with st.spinner("🤔 Refining your plan..."):
-                            response_text = st.session_state.agent["chat"](
-                                f"Based on the previous plan, please refine it with this feedback. Return ONLY valid JSON with same structure: {refine_input}"
-                            )
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button("✅ Apply Refinement", use_container_width=True, type="primary", key="submit_refine"):
+            if refine_input.strip():
+                try:
+                    with st.spinner("🤔 Refining your plan..."):
+                        response_text = st.session_state.agent["chat"](
+                            f"Based on the previous plan, please refine it with this feedback. Return ONLY valid JSON with same structure: {refine_input}"
+                        )
 
-                            # Clean and parse JSON
-                            plan_json = response_text.strip()
-                            plan_json = re.sub(r'```json\s*', '', plan_json)
-                            plan_json = re.sub(r'```\s*', '', plan_json)
+                        # Clean and parse JSON
+                        plan_json = response_text.strip()
+                        plan_json = re.sub(r'```json\s*', '', plan_json)
+                        plan_json = re.sub(r'```\s*', '', plan_json)
 
-                            json_match = re.search(r'\{[\s\S]*\}', plan_json)
-                            if json_match:
-                                json_str = json_match.group(0)
-                                st.session_state.plan_data = json.loads(json_str)
-                                st.session_state.status = "complete"
-                                st.rerun()
-                            else:
-                                st.error("❌ Could not parse refined plan. Try again.")
-                    except json.JSONDecodeError:
-                        st.error("❌ Error parsing refined plan. Try rephrasing your request.")
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
-                else:
-                    st.warning("⚠️ Please enter your refinement request")
-
-        with col2:
-            if st.button("❌ Cancel", use_container_width=True):
-                st.rerun()
+                        json_match = re.search(r'\{[\s\S]*\}', plan_json)
+                        if json_match:
+                            json_str = json_match.group(0)
+                            st.session_state.plan_data = json.loads(json_str)
+                            st.session_state.status = "complete"
+                            st.session_state.refine_input_main = ""
+                            st.rerun()
+                        else:
+                            st.error("❌ Could not parse refined plan. Try again with different wording.")
+                except json.JSONDecodeError:
+                    st.error("❌ Error parsing refined plan. Try rephrasing your request.")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+            else:
+                st.warning("⚠️ Please type your refinement request")
 
 elif st.session_state.plan_data is None and st.session_state.status is None:
-    st.info("👈 Enter a goal and click 'Generate Plan' to get started!")
+    st.info("👈 Enter a goal above and click 'Generate Plan' to get started!")
