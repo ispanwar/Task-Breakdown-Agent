@@ -73,20 +73,28 @@ if generate_btn:
         try:
             with st.spinner("🤔 AI is analyzing your goal..."):
                 response_text = st.session_state.agent["chat"](
-                    f"Please break down this goal into actionable steps: {user_goal}"
+                    f"Break down this goal step-by-step into actionable tasks. Return ONLY valid JSON (no markdown, no extra text) with this structure: {{\"goal\": \"\", \"steps\": [{{\"title\": \"\", \"description\": \"\", \"priority\": 1-5, \"effort\": \"small/medium/large\"}}], \"estimated_time\": \"\", \"tips\": [], \"potential_challenges\": []}}\n\nGoal: {user_goal}"
                 )
 
-                # Parse JSON from response
-                json_match = re.search(r'\{[\s\S]*\}', response_text)
+                # Clean and parse JSON
+                plan_json = response_text.strip()
+
+                # Remove markdown code blocks if present
+                plan_json = re.sub(r'```json\s*', '', plan_json)
+                plan_json = re.sub(r'```\s*', '', plan_json)
+
+                # Extract JSON object
+                json_match = re.search(r'\{[\s\S]*\}', plan_json)
                 if json_match:
-                    plan_json = json_match.group(0)
-                    st.session_state.plan_data = json.loads(plan_json)
+                    json_str = json_match.group(0)
+                    st.session_state.plan_data = json.loads(json_str)
                     st.session_state.status = "complete"
                 else:
-                    st.session_state.error = "Could not parse plan structure"
+                    st.session_state.error = "Could not extract JSON from response"
                     st.session_state.status = "error"
+
         except json.JSONDecodeError as e:
-            st.session_state.error = f"JSON Parse Error: {str(e)}"
+            st.session_state.error = f"Invalid JSON in response. Try again or rephrase your goal."
             st.session_state.status = "error"
         except Exception as e:
             st.session_state.error = f"Error: {str(e)}"
@@ -164,23 +172,29 @@ elif st.session_state.status == "complete" and st.session_state.plan_data:
                 if refine_input.strip():
                     try:
                         with st.spinner("🤔 Refining your plan..."):
-                            response_text = st.session_state.agent["chat"](refine_input)
+                            response_text = st.session_state.agent["chat"](
+                                f"Based on the previous plan, please refine it with this feedback. Return ONLY valid JSON with same structure: {refine_input}"
+                            )
 
-                            # Parse JSON from response
-                            json_match = re.search(r'\{[\s\S]*\}', response_text)
+                            # Clean and parse JSON
+                            plan_json = response_text.strip()
+                            plan_json = re.sub(r'```json\s*', '', plan_json)
+                            plan_json = re.sub(r'```\s*', '', plan_json)
+
+                            json_match = re.search(r'\{[\s\S]*\}', plan_json)
                             if json_match:
-                                plan_json = json_match.group(0)
-                                st.session_state.plan_data = json.loads(plan_json)
+                                json_str = json_match.group(0)
+                                st.session_state.plan_data = json.loads(json_str)
                                 st.session_state.status = "complete"
                                 st.rerun()
                             else:
-                                st.error("Could not parse refined plan")
+                                st.error("❌ Could not parse refined plan. Try again.")
                     except json.JSONDecodeError:
-                        st.error("Error parsing refined plan")
+                        st.error("❌ Error parsing refined plan. Try rephrasing your request.")
                     except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                        st.error(f"❌ Error: {str(e)}")
                 else:
-                    st.warning("Please enter your refinement request")
+                    st.warning("⚠️ Please enter your refinement request")
 
         with col2:
             if st.button("❌ Cancel", use_container_width=True):
