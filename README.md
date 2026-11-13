@@ -62,7 +62,7 @@ A simple AI agent that helps you break down complex goals into actionable, prior
 
 ### Agent Architecture
 
-The agent uses Groq's fast inference engine with Mixtral model for:
+The agent uses Groq's fast inference engine with Llama 3.1 70B model for:
 
 1. **Parse the Goal**: Understands what the user wants to accomplish
 2. **Plan**: Breaks down into logical steps with dependencies
