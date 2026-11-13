@@ -33,11 +33,14 @@ Always think step by step about what's needed to accomplish the goal."""
             "content": user_message
         })
 
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + conversation_history
+
         response = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             max_tokens=2048,
-            system=system_prompt,
-            messages=conversation_history
+            messages=messages
         )
 
         assistant_message = response.choices[0].message.content
