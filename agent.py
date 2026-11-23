@@ -1,10 +1,34 @@
+import os
 from typing import Any, Callable
 
 from dotenv import load_dotenv
 from groq import Groq
 
 load_dotenv()
-client = Groq()
+
+_client: Groq | None = None
+
+
+def _get_client() -> Groq:
+    """Create the Groq client lazily. Reads GROQ_API_KEY from the environment
+    (.env locally) or from Streamlit secrets (Streamlit Cloud)."""
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            try:
+                import streamlit as st
+
+                api_key = st.secrets.get("GROQ_API_KEY")
+            except Exception:
+                api_key = None
+        if not api_key:
+            raise AgentAPIError(
+                "GROQ_API_KEY is not set. Add it to .env locally, or to the app's "
+                "Secrets in Streamlit Cloud (Settings > Secrets)."
+            )
+        _client = Groq(api_key=api_key)
+    return _client
 
 PLAN_JSON_SCHEMA_DESCRIPTION = (
     '{"goal": "", "steps": [{"title": "", "description": "", '
@@ -44,7 +68,7 @@ Always think step by step about what's needed to accomplish the goal."""
         )
 
         try:
-            response = client.chat.completions.create(
+            response = _get_client().chat.completions.create(
                 model="openai/gpt-oss-120b",
                 max_tokens=2048,
                 messages=messages,
