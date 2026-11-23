@@ -1,7 +1,6 @@
 import streamlit as st
-import json
-import re
-from agent import create_task_breakdown_agent
+from agent import create_task_breakdown_agent, AgentAPIError, PLAN_JSON_SCHEMA_DESCRIPTION
+from plan_parser import parse_plan_response, PlanParseError
 
 st.set_page_config(
     page_title="Task Breakdown Agent",
@@ -19,6 +18,12 @@ if "agent" not in st.session_state:
     st.session_state.status = None
     st.session_state.error = None
 
+# Apply a pending input-clear request before the text_area widget below is
+# instantiated (Streamlit forbids writing to a widget's key afterwards).
+if st.session_state.get("clear_user_input"):
+    st.session_state.user_input = ""
+    st.session_state.clear_user_input = False
+
 # Sidebar
 with st.sidebar:
     st.header("📋 Instructions")
@@ -35,7 +40,7 @@ with st.sidebar:
         st.session_state.plan_data = None
         st.session_state.status = None
         st.session_state.error = None
-        st.session_state.user_input = ""
+        st.session_state.clear_user_input = True
         st.rerun()
 
 # Main input section
@@ -59,7 +64,7 @@ if clear_btn:
     st.session_state.plan_data = None
     st.session_state.status = None
     st.session_state.error = None
-    st.session_state.user_input = ""
+    st.session_state.clear_user_input = True
     st.rerun()
 
 # Handle generate plan
@@ -73,28 +78,16 @@ if generate_btn:
         try:
             with st.spinner("🤔 AI is analyzing your goal..."):
                 response_text = st.session_state.agent["chat"](
-                    f"Break down this goal step-by-step into actionable tasks. Return ONLY valid JSON (no markdown, no extra text) with this structure: {{\"goal\": \"\", \"steps\": [{{\"title\": \"\", \"description\": \"\", \"priority\": 1-5, \"effort\": \"small/medium/large\"}}], \"estimated_time\": \"\", \"tips\": [], \"potential_challenges\": []}}\n\nGoal: {user_goal}"
+                    f"Break down this goal step-by-step into actionable tasks. Return ONLY valid JSON (no markdown, no extra text) with this structure: {PLAN_JSON_SCHEMA_DESCRIPTION}\n\nGoal: {user_goal}"
                 )
+                st.session_state.plan_data = parse_plan_response(response_text)
+                st.session_state.status = "complete"
 
-                # Clean and parse JSON
-                plan_json = response_text.strip()
-
-                # Remove markdown code blocks if present
-                plan_json = re.sub(r'```json\s*', '', plan_json)
-                plan_json = re.sub(r'```\s*', '', plan_json)
-
-                # Extract JSON object
-                json_match = re.search(r'\{[\s\S]*\}', plan_json)
-                if json_match:
-                    json_str = json_match.group(0)
-                    st.session_state.plan_data = json.loads(json_str)
-                    st.session_state.status = "complete"
-                else:
-                    st.session_state.error = "Could not extract JSON from response"
-                    st.session_state.status = "error"
-
-        except json.JSONDecodeError as e:
-            st.session_state.error = f"Invalid JSON in response. Try again or rephrase your goal."
+        except AgentAPIError as e:
+            st.session_state.error = f"API error: {e}"
+            st.session_state.status = "error"
+        except PlanParseError as e:
+            st.session_state.error = str(e)
             st.session_state.status = "error"
         except Exception as e:
             st.session_state.error = f"Error: {str(e)}"
@@ -128,7 +121,10 @@ elif st.session_state.status == "complete" and st.session_state.plan_data:
         st.subheader("📋 Steps to Complete")
         for i, step in enumerate(plan["steps"], 1):
             # Priority indicator
-            priority = step.get("priority", 3)
+            try:
+                priority = int(step.get("priority", 3))
+            except (TypeError, ValueError):
+                priority = 3
             if priority >= 4:
                 priority_icon = "🔴"
             elif priority >= 2:
@@ -175,21 +171,12 @@ elif st.session_state.status == "complete" and st.session_state.plan_data:
                         response_text = st.session_state.agent["chat"](
                             f"Based on the previous plan, please refine it with this feedback. Return ONLY valid JSON with same structure: {refine_input}"
                         )
-
-                        # Clean and parse JSON
-                        plan_json = response_text.strip()
-                        plan_json = re.sub(r'```json\s*', '', plan_json)
-                        plan_json = re.sub(r'```\s*', '', plan_json)
-
-                        json_match = re.search(r'\{[\s\S]*\}', plan_json)
-                        if json_match:
-                            json_str = json_match.group(0)
-                            st.session_state.plan_data = json.loads(json_str)
-                            st.session_state.status = "complete"
-                            st.rerun()
-                        else:
-                            st.error("❌ Could not parse refined plan. Try again with different wording.")
-                except json.JSONDecodeError:
+                        st.session_state.plan_data = parse_plan_response(response_text)
+                        st.session_state.status = "complete"
+                        st.rerun()
+                except AgentAPIError as e:
+                    st.error(f"❌ API error: {e}")
+                except PlanParseError:
                     st.error("❌ Error parsing refined plan. Try rephrasing your request.")
                 except Exception as e:
                     st.error(f"❌ Error: {str(e)}")
